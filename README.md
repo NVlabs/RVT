@@ -4,14 +4,14 @@
 
 [***RVT: Robotic View Transformer for 3D Object Manipulation***](https://robotic-view-transformer.github.io/) <br/>
 [Ankit Goyal](http://imankgoyal.github.io), [Jie Xu](https://people.csail.mit.edu/jiex), [Yijie Guo](https://www.guoyijie.me/), [Valts Blukis](https://www.cs.cornell.edu/~valts/), [Yu-Wei Chao](https://research.nvidia.com/person/yu-wei-chao), [Dieter Fox](https://homes.cs.washington.edu/~fox/)<br/>
-***arXiv***
+***arXiv:2306.14896***
 
 If you find our work useful, please consider citing:
 ```
 @article{,
   title={RVT: Robotic View Transformer for 3D Object Manipulation},
   author={Goyal, Ankit and Xu, Jie and Guo, Yijie and Blukis, Valts and Chao, Yu-Wei and Fox, Dieter},
-  journal={arXiv},
+  journal={arXiv:2306.14896},
   year={2023}
 }
 ```
