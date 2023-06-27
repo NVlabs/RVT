@@ -1,0 +1,127 @@
+# copied from: https://github.com/peract/peract/releases/download/v1.0.0/peract_600k.zip
+method:
+  name: PERACT_BC
+  lr: 0.0005
+  lr_scheduler: false
+  num_warmup_steps: 3000
+  optimizer: lamb
+  activation: lrelu
+  norm: None
+  lambda_weight_l2: 1.0e-06
+  trans_loss_weight: 1.0
+  rot_loss_weight: 1.0
+  grip_loss_weight: 1.0
+  collision_loss_weight: 1.0
+  rotation_resolution: 5
+  image_crop_size: 64
+  bounds_offset:
+  - 0.15
+  voxel_sizes:
+  - 100
+  num_latents: 2048
+  latent_dim: 512
+  transformer_depth: 6
+  transformer_iterations: 1
+  cross_heads: 1
+  cross_dim_head: 64
+  latent_heads: 8
+  latent_dim_head: 64
+  pos_encoding_with_lang: false
+  lang_fusion_type: seq
+  voxel_patch_size: 5
+  voxel_patch_stride: 5
+  input_dropout: 0.1
+  attn_dropout: 0.1
+  decoder_dropout: 0.0
+  crop_augmentation: true
+  final_dim: 64
+  transform_augmentation:
+    apply_se3: true
+    aug_xyz:
+    - 0.125
+    - 0.125
+    - 0.125
+    aug_rpy:
+    - 0.0
+    - 0.0
+    - 0.0
+    aug_rot_resolution: 5
+  demo_augmentation: true
+  demo_augmentation_every_n: 10
+  no_skip_connection: false
+  no_perceiver: false
+  no_language: false
+  keypoint_method: heuristic
+ddp:
+  master_addr: "localhost"
+  master_port: "29500"
+  num_devices: 1
+rlbench:
+  task_name: multi
+  tasks:
+  - change_channel
+  - close_jar
+  - insert_onto_square_peg
+  - light_bulb_in
+  - meat_off_grill
+  - open_drawer
+  - place_cups
+  - place_shape_in_shape_sorter
+  - push_buttons
+  - put_groceries_in_cupboard
+  - put_item_in_drawer
+  - put_money_in_safe
+  - reach_and_drag
+  - stack_blocks
+  - stack_cups
+  - turn_tap
+  - set_clock_to_time
+  - place_wine_at_rack_location
+  - put_rubbish_in_color_bin
+  - slide_block_to_color_target
+  - sweep_to_dustpan_of_size
+  demos: 100
+  demo_path: /raid/dataset/
+  episode_length: 25
+  cameras:
+  - front
+  - left_shoulder
+  - right_shoulder
+  - wrist
+  camera_resolution:
+  - 128
+  - 128
+  scene_bounds:
+  - -0.3
+  - -0.5
+  - 0.6
+  - 0.7
+  - 0.5
+  - 1.6
+  include_lang_goal_in_obs: True
+replay:
+  batch_size: 16
+  timesteps: 1
+  prioritisation: false
+  task_uniform: true
+  use_disk: true
+  path: /raid/arm/replay
+  max_parallel_processes: 32
+framework:
+  log_freq: 100
+  save_freq: 10000
+  train_envs: 1
+  replay_ratio: 16
+  transitions_before_train: 200
+  tensorboard_logging: true
+  csv_logging: true
+  training_iterations: 600001
+  gpu: 0
+  env_gpu: 0
+  logdir: /home/user/workspace/logs_may16_n100
+  seeds: 1
+  start_seed: 0
+  load_existing_weights: true
+  num_weights_to_keep: 60
+  record_every_n: 5
+

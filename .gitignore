@@ -1,0 +1,26 @@
+# Copyright (c) 2022-2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+#
+# Licensed under the NVIDIA Source Code License [see LICENSE for details].
+
+*__pycache__/
+data/train/
+data/val/
+data/test/
+replay/
+replay_tmp/
+replay_test*/
+replay_train*/
+replay_our_test*/
+replay_our_train*/
+real_world_demo*/
+coppelia_install_dir/
+runs/
+runs_*/
+runs_ngc_mnt
+runs_temp
+*.ipynb_checkpoints/
+.vscode/
+build/
+dist/
+*.egg-info/
+

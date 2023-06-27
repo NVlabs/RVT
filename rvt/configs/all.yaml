@@ -1,0 +1,15 @@
+exp_id: rvt
+tasks: all
+bs: 3
+num_workers: 3
+epochs: 15
+sample_distribution_mode: task_uniform
+peract:
+  lr: 1e-4
+  warmup_steps: 2000
+  optimizer_type: lamb
+  lr_cos_dec: True
+  transform_augmentation_xyz: [0.125, 0.125, 0.125]
+  transform_augmentation_rpy: [0.0, 0.0, 45.0]
+rvt:
+  place_with_mean: False
