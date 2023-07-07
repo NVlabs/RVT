@@ -1,7 +1,7 @@
 [![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/rvt-robotic-view-transformer-for-3d-object/robot-manipulation-on-rlbench)](https://paperswithcode.com/sota/robot-manipulation-on-rlbench?p=rvt-robotic-view-transformer-for-3d-object)
 
 <div style="margin: 20px;">
-<img src="https://robotic-view-transformer.github.io/real_world/real_world_small.gif" align="right" width="30%"/>
+<img src="https://robotic-view-transformer.github.io/real_world/real_world_very_small.gif" align="right" height="120px"/>
 </div>
 
 [***RVT: Robotic View Transformer for 3D Object Manipulation***](https://robotic-view-transformer.github.io/) <br/>
