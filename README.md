@@ -137,6 +137,8 @@ pip install pytorch torchvision torchaudio
 pip install 'git+https://github.com/facebookresearch/pytorch3d.git@stable'
 ```
 
+- If you are having issues running evaluation on a headless server, please refer to https://github.com/NVlabs/RVT/issues/2#issuecomment-1620704943.
+
 ## FAQ's
 ###### Q. What is the advantag of RVT over PerAct?
 RVT is both faster to train and performs better than PerAct. <br>
