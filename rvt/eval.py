@@ -6,6 +6,10 @@ import os
 import yaml
 import csv
 import torch
+import cv2
+import shutil
+
+import numpy as np
 
 from omegaconf import OmegaConf
 from multiprocessing import Value
@@ -185,6 +189,7 @@ def eval(
     logging=False,
     log_dir=None,
     verbose=True,
+    save_video=False,
 ):
     agent.eval()
     if isinstance(agent, rvt_agent.RVTAgent):
@@ -224,7 +229,7 @@ def eval(
         swap_task_every=eval_episodes,
         include_lang_goal_in_obs=True,
         time_in_state=True,
-        record_every_n=-1,
+        record_every_n=1 if save_video else -1,
     )
 
     eval_env.eval = True
@@ -327,6 +332,50 @@ def eval(
         print(f"[Evaluation] Finished {task_name} | Final Score: {task_score}\n")
 
         scores.append(task_score)
+
+        if save_video:
+            video_image_folder = "./tmp"
+            record_fps = 25
+            record_folder = os.path.join(log_dir, "videos")
+            os.makedirs(record_folder, exist_ok=True)
+            video_success_cnt = 0
+            video_fail_cnt = 0
+            video_cnt = 0
+            for summary in summaries:
+                if isinstance(summary, VideoSummary):
+                    video = deepcopy(summary.value)
+                    video = np.transpose(video, (0, 2, 3, 1))
+                    video = video[:, :, :, ::-1]
+                    if task_rewards[video_cnt] > 99:
+                        video_path = os.path.join(
+                            record_folder,
+                            f"{task_name}_success_{video_success_cnt}.mp4",
+                        )
+                        video_success_cnt += 1
+                    else:
+                        video_path = os.path.join(
+                            record_folder, f"{task_name}_fail_{video_fail_cnt}.mp4"
+                        )
+                        video_fail_cnt += 1
+                    video_cnt += 1
+                    os.makedirs(video_image_folder, exist_ok=True)
+                    for idx in range(len(video) - 10):
+                        cv2.imwrite(
+                            os.path.join(video_image_folder, f"{idx}.png"), video[idx]
+                        )
+                    images_path = os.path.join(video_image_folder, r"%d.png")
+                    os.system(
+                        "ffmpeg -i {} -vf palettegen palette.png -hide_banner -loglevel error".format(
+                            images_path
+                        )
+                    )
+                    os.system(
+                        "ffmpeg -framerate {} -i {} -i palette.png -lavfi paletteuse {} -hide_banner -loglevel error".format(
+                            record_fps, images_path, video_path
+                        )
+                    )
+                    os.remove("palette.png")
+                    shutil.rmtree(video_image_folder)
 
     eval_env.shutdown()
 
@@ -455,6 +504,7 @@ def _eval(args):
             logging=True,
             log_dir=agent_eval_log_dir,
             verbose=True,
+            save_video=args.save_video,
         )
         print(f"model {model_path}, scores {scores}")
         task_scores = {}
@@ -474,7 +524,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.log_name is None:
-        args.log_name = 'none'
+        args.log_name = "none"
 
     if not (args.peract_official):
         args.eval_log_dir = os.path.join(args.model_folder, "eval", args.log_name)
