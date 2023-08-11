@@ -25,11 +25,11 @@ from yarr.utils.stat_accumulator import SimpleAccumulator
 from yarr.utils.log_writer import LogWriter
 from yarr.agents.agent import VideoSummary
 
-import mvt.config as default_mvt_cfg
+import rvt.mvt.config as default_mvt_cfg
 import rvt.models.rvt_agent as rvt_agent
 import rvt.config as default_exp_cfg
 
-from mvt import MVT
+from rvt.mvt.mvt import MVT
 from rvt.libs.peract.helpers import utils
 from rvt.utils.custom_rlbench_env import (
     CustomMultiTaskRLBenchEnv2 as CustomMultiTaskRLBenchEnv,

@@ -2,4 +2,3 @@
 #
 # Licensed under the NVIDIA Source Code License [see LICENSE for details].
 
-from .mvt import MVT
