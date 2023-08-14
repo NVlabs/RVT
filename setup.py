@@ -41,6 +41,6 @@ setup(
         "Natural Language :: English",
         "Topic :: Scientific/Engineering",
     ],
-    packages=['rvt'],
+    packages=['rvt', 'mvt'],
     install_requires=requirements,
 )

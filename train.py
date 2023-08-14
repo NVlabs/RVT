@@ -17,7 +17,7 @@ import torch.multiprocessing as mp
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-import config as exp_cfg_mod
+import rvt.config as exp_cfg_mod
 import rvt.models.rvt_agent as rvt_agent
 import rvt.utils.ddp_utils as ddp_utils
 import mvt.config as mvt_cfg_mod
