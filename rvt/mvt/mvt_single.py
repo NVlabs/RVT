@@ -10,7 +10,7 @@ import torch.nn.functional as F
 from torch import nn
 from einops import rearrange, repeat
 
-from mvt.attn import (
+from rvt.mvt.attn import (
     Conv2DBlock,
     Conv2DUpsampleBlock,
     PreNorm,

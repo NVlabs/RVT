@@ -15,10 +15,10 @@ from torch.nn.parallel.distributed import DistributedDataParallel
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
 import rvt.utils.peract_utils as peract_utils
-import mvt.utils as mvt_utils
+import rvt.mvt.utils as mvt_utils
 import rvt.utils.rvt_utils as rvt_utils
 import peract_colab.arm.utils as arm_utils
-from mvt.augmentation import apply_se3_aug_con, aug_utils
+from rvt.mvt.augmentation import apply_se3_aug_con, aug_utils
 from peract_colab.arm.optim.lamb import Lamb
 from yarr.agents.agent import ActResult
 from rvt.utils.dataset import _clip_encode_text

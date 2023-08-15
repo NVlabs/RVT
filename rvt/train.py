@@ -20,9 +20,9 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 import config as exp_cfg_mod
 import rvt.models.rvt_agent as rvt_agent
 import rvt.utils.ddp_utils as ddp_utils
-import mvt.config as mvt_cfg_mod
+import rvt.mvt.config as mvt_cfg_mod
 
-from mvt import MVT
+from rvt.mvt.mvt import MVT
 from rvt.models.rvt_agent import print_eval_log, print_loss_log
 from rvt.utils.get_dataset import get_dataset
 from rvt.utils.rvt_utils import (

@@ -7,11 +7,11 @@ import torch
 
 from torch import nn
 
-import mvt.utils as mvt_utils
+import rvt.mvt.utils as mvt_utils
 
-from mvt.mvt_single import MVT as MVTSingle
-from mvt.config import get_cfg_defaults
-from mvt.renderer import BoxRenderer
+from rvt.mvt.mvt_single import MVT as MVTSingle
+from rvt.mvt.config import get_cfg_defaults
+from rvt.mvt.renderer import BoxRenderer
 
 
 class MVT(nn.Module):
