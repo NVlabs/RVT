@@ -12,7 +12,7 @@ import signal
 from datetime import datetime
 
 import torch
-import tensorboardX
+from torch.utils.tensorboard import SummaryWriter
 
 from torch.nn.parallel import DistributedDataParallel as DDP
 
@@ -87,7 +87,7 @@ def count_parameters(model):
 
 class TensorboardManager:
     def __init__(self, path):
-        self.writer = tensorboardX.SummaryWriter(path)
+        self.writer = SummaryWriter(path)
 
     def update(self, split, step, vals):
         for k, v in vals.items():

@@ -13,7 +13,6 @@ requirements = [
     "scipy",
     "einops",
     "pyrender",
-    "tensorboardX",
     "transformers",
     "omegaconf",
     "natsort",
