@@ -13,7 +13,7 @@ If you find our work useful, please consider citing:
 @article{,
   title={RVT: Robotic View Transformer for 3D Object Manipulation},
   author={Goyal, Ankit and Xu, Jie and Guo, Yijie and Blukis, Valts and Chao, Yu-Wei and Fox, Dieter},
-  journal={arXiv:2306.14896},
+  journal={CoRL},
   year={2023}
 }
 ```
