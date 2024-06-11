@@ -1,0 +1,8 @@
+transforms3d
+jupyter
+numpy
+torch
+matplotlib
+imageio
+trimesh
+meshcat

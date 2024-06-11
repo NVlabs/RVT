@@ -6,6 +6,7 @@
 # https://github.com/lucidrains/perceiver-pytorch/blob/main/perceiver_pytorch/perceiver_io.py
 # https://github.com/peract/peract/blob/main/helpers/network_utils.py
 
+import math
 from math import log
 from functools import wraps
 from packaging import version
@@ -16,6 +17,11 @@ import torch.nn.functional as F
 from tqdm import tqdm
 from torch import nn, einsum
 from einops import rearrange, repeat
+
+try:
+    import xformers.ops as xops
+except ImportError as e:
+    xops = None
 
 LRELU_SLOPE = 0.02
 
@@ -80,9 +86,11 @@ class FeedForward(nn.Module):
 
 
 class Attention(nn.Module):  # is all you need. Living up to its name.
-    def __init__(self, query_dim, context_dim=None, heads=8, dim_head=64, dropout=0.0):
+    def __init__(self, query_dim, context_dim=None, heads=8, dim_head=64,
+                 dropout=0.0, use_fast=False):
 
         super().__init__()
+        self.use_fast = use_fast
         inner_dim = dim_head * heads
         context_dim = default(context_dim, query_dim)
         self.scale = dim_head**-0.5
@@ -96,6 +104,13 @@ class Attention(nn.Module):  # is all you need. Living up to its name.
         # dropout left in use_fast for backward compatibility
         self.dropout = nn.Dropout(self.dropout_p)
 
+        self.avail_xf = False
+        if self.use_fast:
+            if not xops is None:
+                self.avail_xf = True
+            else:
+                self.use_fast = False
+
     def forward(self, x, context=None, mask=None):
         h = self.heads
 
@@ -104,17 +119,26 @@ class Attention(nn.Module):  # is all you need. Living up to its name.
         k, v = self.to_kv(context).chunk(2, dim=-1)
 
         q, k, v = map(lambda t: rearrange(t, "b n (h d) -> (b h) n d", h=h), (q, k, v))
-        sim = einsum("b i d, b j d -> b i j", q, k) * self.scale
-        if exists(mask):
-            mask = rearrange(mask, "b ... -> b (...)")
-            max_neg_value = -torch.finfo(sim.dtype).max
-            mask = repeat(mask, "b j -> (b h) () j", h=h)
-            sim.masked_fill_(~mask, max_neg_value)
-        # attention
-        attn = sim.softmax(dim=-1)
-        # dropout
-        attn = self.dropout(attn)
-        out = einsum("b i j, b j d -> b i d", attn, v)
+        if self.use_fast:
+            # using py2 if available
+            dropout_p = self.dropout_p if self.training else 0.0
+            # using xf if available
+            if self.avail_xf:
+                out = xops.memory_efficient_attention(
+                    query=q, key=k, value=v, p=dropout_p
+                )
+        else:
+            sim = einsum("b i d, b j d -> b i j", q, k) * self.scale
+            if exists(mask):
+                mask = rearrange(mask, "b ... -> b (...)")
+                max_neg_value = -torch.finfo(sim.dtype).max
+                mask = repeat(mask, "b j -> (b h) () j", h=h)
+                sim.masked_fill_(~mask, max_neg_value)
+            # attention
+            attn = sim.softmax(dim=-1)
+            # dropout
+            attn = self.dropout(attn)
+            out = einsum("b i j, b j d -> b i d", attn, v)
 
         out = rearrange(out, "(b h) n d -> b n (h d)", h=h)
         out = self.to_out(out)
@@ -231,15 +255,26 @@ class Conv2DUpsampleBlock(nn.Module):
         kernel_sizes=3,
         norm=None,
         activation=None,
+        out_size=None,
     ):
         super().__init__()
         layer = [
             Conv2DBlock(in_channels, out_channels, kernel_sizes, 1, norm, activation)
         ]
         if strides > 1:
-            layer.append(
-                nn.Upsample(scale_factor=strides, mode="bilinear", align_corners=False)
-            )
+            if out_size is None:
+                layer.append(
+                    nn.Upsample(scale_factor=strides, mode="bilinear", align_corners=False)
+                )
+            else:
+                layer.append(
+                    nn.Upsample(size=out_size, mode="bilinear", align_corners=False)
+                )
+
+        if out_size is not None:
+            if kernel_sizes % 2 == 0:
+                kernel_sizes += 1
+
         convt_block = Conv2DBlock(
             out_channels, out_channels, kernel_sizes, 1, norm, activation
         )
@@ -287,4 +322,31 @@ class DenseBlock(nn.Module):
         x = self.linear(x)
         x = self.norm(x) if self.norm is not None else x
         x = self.activation(x) if self.activation is not None else x
+        return x
+
+
+# based on https://pytorch.org/tutorials/beginner/transformer_tutorial.html
+class FixedPositionalEncoding(nn.Module):
+    def __init__(self, feat_per_dim: int, feat_scale_factor: int):
+        super().__init__()
+        self.feat_scale_factor = feat_scale_factor
+        # shape [1, feat_per_dim // 2]
+        div_term = torch.exp(
+            torch.arange(0, feat_per_dim, 2) * (-math.log(10000.0) /
+                                                feat_per_dim)
+        ).unsqueeze(0)
+        self.register_buffer("div_term", div_term)
+
+    def forward(self, x):
+        """
+        :param x: Tensor, shape [batch_size, input_dim]
+        :return: Tensor, shape [batch_size, input_dim * feat_per_dim]
+        """
+        assert len(x.shape) == 2
+        batch_size, input_dim = x.shape
+        x = x.view(-1, 1)
+        x = torch.cat((
+            torch.sin(self.feat_scale_factor * x * self.div_term),
+            torch.cos(self.feat_scale_factor * x * self.div_term)), dim=1)
+        x = x.view(batch_size, -1)
         return x

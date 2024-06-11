@@ -17,6 +17,7 @@ _C.epochs = 20
 _C.num_workers = 0
 # 'transition_uniform' or 'task_uniform'
 _C.sample_distribution_mode = 'transition_uniform'
+_C.train_iter = 16 * 10000
 
 # arguments present in both peract and rvt
 # some of them donot support every possible combination in peract
@@ -30,6 +31,8 @@ _C.peract.warmup_steps = 0
 _C.peract.lr_cos_dec = False
 _C.peract.add_rgc_loss = True
 _C.peract.num_rotation_classes = 72
+_C.peract.amp = False
+_C.peract.bnb = False
 _C.peract.transform_augmentation = True
 _C.peract.transform_augmentation_xyz = [0.1, 0.1, 0.1]
 _C.peract.transform_augmentation_rpy = [0.0, 0.0, 20.0]
