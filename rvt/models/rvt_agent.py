@@ -4,13 +4,15 @@
 
 import pprint
 
+import clip
 import torch
 import torchvision
 import numpy as np
 import torch.nn as nn
+import bitsandbytes as bnb
 
-import clip
 from scipy.spatial.transform import Rotation
+from torch.cuda.amp import autocast, GradScaler
 from torch.nn.parallel.distributed import DistributedDataParallel
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
@@ -18,6 +20,7 @@ import rvt.utils.peract_utils as peract_utils
 import rvt.mvt.utils as mvt_utils
 import rvt.utils.rvt_utils as rvt_utils
 import peract_colab.arm.utils as arm_utils
+
 from rvt.mvt.augmentation import apply_se3_aug_con, aug_utils
 from peract_colab.arm.optim.lamb import Lamb
 from yarr.agents.agent import ActResult
@@ -268,7 +271,10 @@ class RVTAgent:
         self,
         network: nn.Module,
         num_rotation_classes: int,
+        stage_two: bool,
         add_lang: bool,
+        amp: bool,
+        bnb: bool,
         move_pc_in_bound: bool,
         lr: float = 0.0001,
         lr_cos_dec: bool = False,
@@ -287,12 +293,20 @@ class RVTAgent:
         add_rgc_loss: bool = False,
         scene_bounds: list = peract_utils.SCENE_BOUNDS,
         cameras: list = peract_utils.CAMERAS,
+        rot_ver: int = 0,
+        rot_x_y_aug: int = 2,
         log_dir="",
     ):
         """
         :param gt_hm_sigma: the std of the groundtruth hm, currently for for
             2d, if -1 then only single point is considered
         :type gt_hm_sigma: float
+        :param rot_ver: version of the rotation prediction network
+            Either:
+                0: same as peract, independent discrete xyz predictions
+                1: xyz prediction dependent on one another
+        :param rot_x_y_aug: only applicable when rot_ver is 1, it specifies how
+            much error we should add to groundtruth rotation while training
         :param log_dir: a folder location for saving some intermediate data
         """
 
@@ -315,6 +329,9 @@ class RVTAgent:
         self.gt_hm_sigma = gt_hm_sigma
         self.img_aug = img_aug
         self.add_rgc_loss = add_rgc_loss
+        self.amp = amp
+        self.bnb = bnb
+        self.stage_two = stage_two
         self.add_lang = add_lang
         self.log_dir = log_dir
         self.warmup_steps = warmup_steps
@@ -323,6 +340,8 @@ class RVTAgent:
         self.scene_bounds = scene_bounds
         self.cameras = cameras
         self.move_pc_in_bound = move_pc_in_bound
+        self.rot_ver = rot_ver
+        self.rot_x_y_aug = rot_x_y_aug
 
         self._cross_entropy_loss = nn.CrossEntropyLoss(reduction="none")
         if isinstance(self._network, DistributedDataParallel):
@@ -332,19 +351,30 @@ class RVTAgent:
 
         self.num_all_rot = self._num_rotation_classes * 3
 
+        self.scaler = GradScaler(enabled=self.amp)
+
     def build(self, training: bool, device: torch.device = None):
         self._training = training
         self._device = device
 
         if self._optimizer_type == "lamb":
-            # From: https://github.com/cybertronai/pytorch-lamb/blob/master/pytorch_lamb/lamb.py
-            self._optimizer = Lamb(
-                self._network.parameters(),
-                lr=self._lr,
-                weight_decay=self._lambda_weight_l2,
-                betas=(0.9, 0.999),
-                adam=False,
-            )
+            if self.bnb:
+                print("Using 8-Bit Optimizer")
+                self._optimizer = bnb.optim.LAMB(
+                    self._network.parameters(),
+                    lr=self._lr,
+                    weight_decay=self._lambda_weight_l2,
+                    betas=(0.9, 0.999),
+                )
+            else:
+                # From: https://github.com/cybertronai/pytorch-lamb/blob/master/pytorch_lamb/lamb.py
+                self._optimizer = Lamb(
+                    self._network.parameters(),
+                    lr=self._lr,
+                    weight_decay=self._lambda_weight_l2,
+                    betas=(0.9, 0.999),
+                    adam=False,
+                )
         elif self._optimizer_type == "adam":
             self._optimizer = torch.optim.Adam(
                 self._network.parameters(),
@@ -438,7 +468,7 @@ class RVTAgent:
             action_collision_one_hot,
         )
 
-    def get_q(self, out, dims, only_pred=False):
+    def get_q(self, out, dims, only_pred=False, get_q_trans=True):
         """
         :param out: output of mvt
         :param dims: tensor dimensions (bs, nc, h, w)
@@ -450,19 +480,43 @@ class RVTAgent:
         bs, nc, h, w = dims
         assert isinstance(only_pred, bool)
 
-        pts = None
-        # (bs, h*w, nc)
-        q_trans = out["trans"].view(bs, nc, h * w).transpose(1, 2)
-        if not only_pred:
-            q_trans = q_trans.clone()
+        if get_q_trans:
+            pts = None
+            # (bs, h*w, nc)
+            q_trans = out["trans"].view(bs, nc, h * w).transpose(1, 2)
+            if not only_pred:
+                q_trans = q_trans.clone()
 
-        # (bs, 218)
-        rot_q = out["feat"].view(bs, -1)[:, 0 : self.num_all_rot]
-        grip_q = out["feat"].view(bs, -1)[:, self.num_all_rot : self.num_all_rot + 2]
-        # (bs, 2)
-        collision_q = out["feat"].view(bs, -1)[
-            :, self.num_all_rot + 2 : self.num_all_rot + 4
-        ]
+            # if two stages, we concatenate the q_trans, and replace all other
+            # q
+            if self.stage_two:
+                out = out["mvt2"]
+                q_trans2 = out["trans"].view(bs, nc, h * w).transpose(1, 2)
+                if not only_pred:
+                    q_trans2 = q_trans2.clone()
+                q_trans = torch.cat((q_trans, q_trans2), dim=2)
+        else:
+            pts = None
+            q_trans = None
+            if self.stage_two:
+                out = out["mvt2"]
+
+        if self.rot_ver == 0:
+            # (bs, 218)
+            rot_q = out["feat"].view(bs, -1)[:, 0 : self.num_all_rot]
+            grip_q = out["feat"].view(bs, -1)[:, self.num_all_rot : self.num_all_rot + 2]
+            # (bs, 2)
+            collision_q = out["feat"].view(bs, -1)[
+                :, self.num_all_rot + 2 : self.num_all_rot + 4
+            ]
+        elif self.rot_ver == 1:
+            rot_q = torch.cat((out["feat_x"], out["feat_y"], out["feat_z"]),
+                              dim=-1).view(bs, -1)
+            grip_q = out["feat_ex_rot"].view(bs, -1)[:, :2]
+            collision_q = out["feat_ex_rot"].view(bs, -1)[:, 2:]
+        else:
+            assert False
+
         y_q = None
 
         return q_trans, rot_q, grip_q, collision_q, y_q, pts
@@ -569,84 +623,105 @@ class RVTAgent:
 
             dyn_cam_info = None
 
-        out = self._network(
-            pc=pc,
-            img_feat=img_feat,
-            proprio=proprio,
-            lang_emb=lang_goal_embs,
-            img_aug=img_aug,
-        )
+        with autocast(enabled=self.amp):
+            (
+                action_rot_x_one_hot,
+                action_rot_y_one_hot,
+                action_rot_z_one_hot,
+                action_grip_one_hot,  # (bs, 2)
+                action_collision_one_hot,  # (bs, 2)
+            ) = self._get_one_hot_expert_actions(
+                bs, action_rot, action_grip, action_ignore_collisions, device=self._device
+            )
 
-        q_trans, rot_q, grip_q, collision_q, y_q, pts = self.get_q(
-            out, dims=(bs, nc, h, w)
-        )
+            if self.rot_ver == 1:
+                rot_x_y = torch.cat(
+                    [
+                        action_rot_x_one_hot.argmax(dim=-1, keepdim=True),
+                        action_rot_y_one_hot.argmax(dim=-1, keepdim=True),
+                    ],
+                    dim=-1,
+                )
+                if self.rot_x_y_aug != 0:
+                    # add random interger between -rot_x_y_aug and rot_x_y_aug to rot_x_y
+                    rot_x_y += torch.randint(
+                        -self.rot_x_y_aug, self.rot_x_y_aug, size=rot_x_y.shape
+                    ).to(rot_x_y.device)
+                    rot_x_y %= self._num_rotation_classes
 
-        (
-            action_rot_x_one_hot,
-            action_rot_y_one_hot,
-            action_rot_z_one_hot,
-            action_grip_one_hot,  # (bs, 2)
-            action_collision_one_hot,  # (bs, 2)
-        ) = self._get_one_hot_expert_actions(
-            bs, action_rot, action_grip, action_ignore_collisions, device=self._device
-        )
-        action_trans = self.get_action_trans(
-            wpt_local, pts, out, dyn_cam_info, dims=(bs, nc, h, w)
-        )
+            out = self._network(
+                pc=pc,
+                img_feat=img_feat,
+                proprio=proprio,
+                lang_emb=lang_goal_embs,
+                img_aug=img_aug,
+                wpt_local=wpt_local if self._network.training else None,
+                rot_x_y=rot_x_y if self.rot_ver == 1 else None,
+            )
+
+            q_trans, rot_q, grip_q, collision_q, y_q, pts = self.get_q(
+                out, dims=(bs, nc, h, w)
+            )
+
+            action_trans = self.get_action_trans(
+                wpt_local, pts, out, dyn_cam_info, dims=(bs, nc, h, w)
+            )
 
         loss_log = {}
         if backprop:
-            # cross-entropy loss
-            trans_loss = self._cross_entropy_loss(q_trans, action_trans).mean()
-            rot_loss_x = rot_loss_y = rot_loss_z = 0.0
-            grip_loss = 0.0
-            collision_loss = 0.0
-            if self.add_rgc_loss:
-                rot_loss_x = self._cross_entropy_loss(
-                    rot_q[
-                        :,
-                        0 * self._num_rotation_classes : 1 * self._num_rotation_classes,
-                    ],
-                    action_rot_x_one_hot.argmax(-1),
-                ).mean()
+            with autocast(enabled=self.amp):
+                # cross-entropy loss
+                trans_loss = self._cross_entropy_loss(q_trans, action_trans).mean()
+                rot_loss_x = rot_loss_y = rot_loss_z = 0.0
+                grip_loss = 0.0
+                collision_loss = 0.0
+                if self.add_rgc_loss:
+                    rot_loss_x = self._cross_entropy_loss(
+                        rot_q[
+                            :,
+                            0 * self._num_rotation_classes : 1 * self._num_rotation_classes,
+                        ],
+                        action_rot_x_one_hot.argmax(-1),
+                    ).mean()
 
-                rot_loss_y = self._cross_entropy_loss(
-                    rot_q[
-                        :,
-                        1 * self._num_rotation_classes : 2 * self._num_rotation_classes,
-                    ],
-                    action_rot_y_one_hot.argmax(-1),
-                ).mean()
+                    rot_loss_y = self._cross_entropy_loss(
+                        rot_q[
+                            :,
+                            1 * self._num_rotation_classes : 2 * self._num_rotation_classes,
+                        ],
+                        action_rot_y_one_hot.argmax(-1),
+                    ).mean()
 
-                rot_loss_z = self._cross_entropy_loss(
-                    rot_q[
-                        :,
-                        2 * self._num_rotation_classes : 3 * self._num_rotation_classes,
-                    ],
-                    action_rot_z_one_hot.argmax(-1),
-                ).mean()
+                    rot_loss_z = self._cross_entropy_loss(
+                        rot_q[
+                            :,
+                            2 * self._num_rotation_classes : 3 * self._num_rotation_classes,
+                        ],
+                        action_rot_z_one_hot.argmax(-1),
+                    ).mean()
 
-                grip_loss = self._cross_entropy_loss(
-                    grip_q,
-                    action_grip_one_hot.argmax(-1),
-                ).mean()
+                    grip_loss = self._cross_entropy_loss(
+                        grip_q,
+                        action_grip_one_hot.argmax(-1),
+                    ).mean()
 
-                collision_loss = self._cross_entropy_loss(
-                    collision_q, action_collision_one_hot.argmax(-1)
-                ).mean()
+                    collision_loss = self._cross_entropy_loss(
+                        collision_q, action_collision_one_hot.argmax(-1)
+                    ).mean()
 
-            total_loss = (
-                trans_loss
-                + rot_loss_x
-                + rot_loss_y
-                + rot_loss_z
-                + grip_loss
-                + collision_loss
-            )
+                total_loss = (
+                    trans_loss
+                    + rot_loss_x
+                    + rot_loss_y
+                    + rot_loss_z
+                    + grip_loss
+                    + collision_loss
+                )
 
             self._optimizer.zero_grad(set_to_none=True)
-            total_loss.backward()
-            self._optimizer.step()
+            self.scaler.scale(total_loss).backward()
+            self.scaler.step(self._optimizer)
+            self.scaler.update()
             self._lr_sched.step()
 
             loss_log = {
@@ -746,7 +821,7 @@ class RVTAgent:
             img_aug=0,  # no img augmentation while acting
         )
         _, rot_q, grip_q, collision_q, y_q, _ = self.get_q(
-            out, dims=(bs, nc, h, w), only_pred=True
+            out, dims=(bs, nc, h, w), only_pred=True, get_q_trans=False
         )
         pred_wpt, pred_rot_quat, pred_grip, pred_coll = self.get_pred(
             out, rot_q, grip_q, collision_q, y_q, rev_trans, dyn_cam_info
@@ -791,7 +866,15 @@ class RVTAgent:
         rev_trans,
         dyn_cam_info,
     ):
-        pred_wpt_local = self._net_mod.get_wpt(out, dyn_cam_info, y_q)
+        if self.stage_two:
+            assert y_q is None
+            mvt1_or_mvt2 = False
+        else:
+            mvt1_or_mvt2 = True
+
+        pred_wpt_local = self._net_mod.get_wpt(
+            out, mvt1_or_mvt2, dyn_cam_info, y_q
+        )
 
         pred_wpt = []
         for _pred_wpt_local, _rev_trans in zip(pred_wpt_local, rev_trans):
@@ -823,6 +906,7 @@ class RVTAgent:
 
         return pred_wpt, pred_rot_quat, pred_grip, pred_coll
 
+    @torch.no_grad()
     def get_action_trans(
         self,
         wpt_local,
@@ -833,9 +917,25 @@ class RVTAgent:
     ):
         bs, nc, h, w = dims
         wpt_img = self._net_mod.get_pt_loc_on_img(
-            wpt_local.unsqueeze(1), dyn_cam_info=dyn_cam_info, out=None
+            wpt_local.unsqueeze(1),
+            mvt1_or_mvt2=True,
+            dyn_cam_info=dyn_cam_info,
+            out=None
         )
         assert wpt_img.shape[1] == 1
+        if self.stage_two:
+            wpt_img2 = self._net_mod.get_pt_loc_on_img(
+                wpt_local.unsqueeze(1),
+                mvt1_or_mvt2=False,
+                dyn_cam_info=dyn_cam_info,
+                out=out,
+            )
+            assert wpt_img2.shape[1] == 1
+
+            # (bs, 1, 2 * num_img, 2)
+            wpt_img = torch.cat((wpt_img, wpt_img2), dim=-2)
+            nc = nc * 2
+
         # (bs, num_img, 2)
         wpt_img = wpt_img.squeeze(1)
 

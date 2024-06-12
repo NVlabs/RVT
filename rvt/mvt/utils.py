@@ -89,7 +89,10 @@ def trans_pc(pc, loc, sca):
     elif isinstance(pc, torch.Tensor):
         assert len(pc.shape) in [2, 3]
         assert pc.shape[-1] == 3
-        pc = sca * (pc - loc)
+        if len(pc.shape) == 2:
+            pc = sca * (pc - loc)
+        else:
+            pc = sca * (pc - loc.unsqueeze(1))
     else:
         assert False
 

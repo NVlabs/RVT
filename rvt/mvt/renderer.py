@@ -319,6 +319,7 @@ class BoxRenderer:
         radius=0.012,
         points_per_pixel=5,
         compositor="norm",
+        three_views=False,
         with_depth=False,
     ):
         """Rendering images form point clouds
@@ -335,6 +336,7 @@ class BoxRenderer:
         self.points_per_pixel = points_per_pixel
         self.compositor = compositor
         self.with_depth = with_depth
+        assert three_views == False, "Not Supported"
 
         self.init()
 

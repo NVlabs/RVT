@@ -17,6 +17,9 @@ import torch.multiprocessing as mp
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+os.environ["BITSANDBYTES_NOWELCOME"] = "1"
+
 import config as exp_cfg_mod
 import rvt.models.rvt_agent as rvt_agent
 import rvt.utils.ddp_utils as ddp_utils
@@ -38,6 +41,7 @@ from rvt.utils.peract_utils import (
     IMAGE_SIZE,
     DATA_FOLDER,
 )
+
 
 # new train takes the dataset as input
 def train(agent, dataset, training_iterations, rank=0):
@@ -166,7 +170,7 @@ def experiment(rank, cmd_args, devices, port):
     BATCH_SIZE_TRAIN = exp_cfg.bs
     NUM_TRAIN = 100
     # to match peract, iterations per epoch
-    TRAINING_ITERATIONS = int(10000 // (exp_cfg.bs * len(devices) / 16))
+    TRAINING_ITERATIONS = int(exp_cfg.train_iter // (exp_cfg.bs * len(devices)))
     EPOCHS = exp_cfg.epochs
     TRAIN_REPLAY_STORAGE_DIR = "replay/replay_train"
     TEST_REPLAY_STORAGE_DIR = "replay/replay_val"
@@ -204,6 +208,11 @@ def experiment(rank, cmd_args, devices, port):
         mvt_cfg.feat_dim = get_num_feat(exp_cfg.peract)
         mvt_cfg.freeze()
 
+        # for maintaining backward compatibility
+        assert mvt_cfg.num_rot == exp_cfg.peract.num_rotation_classes, print(
+            mvt_cfg.num_rot, exp_cfg.peract.num_rotation_classes
+        )
+
         torch.cuda.set_device(device)
         torch.cuda.empty_cache()
         rvt = MVT(
@@ -217,6 +226,8 @@ def experiment(rank, cmd_args, devices, port):
             network=rvt,
             image_resolution=[IMAGE_SIZE, IMAGE_SIZE],
             add_lang=mvt_cfg.add_lang,
+            stage_two=mvt_cfg.stage_two,
+            rot_ver=mvt_cfg.rot_ver,
             scene_bounds=SCENE_BOUNDS,
             cameras=CAMERAS,
             log_dir=f"{log_dir}/test_run/",

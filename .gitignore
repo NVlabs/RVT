@@ -3,19 +3,12 @@
 # Licensed under the NVIDIA Source Code License [see LICENSE for details].
 
 *__pycache__/
-data/train/
-data/val/
-data/test/
-replay/
-replay_tmp/
-replay_test*/
-replay_train*/
-replay_our_test*/
-replay_our_train*/
-real_world_demo*/
+rvt/data/train/
+rvt/data/val/
+rvt/data/test/
+rvt/replay/
 coppelia_install_dir/
-runs/
-runs_*/
+rvt/runs/
 runs_ngc_mnt
 runs_temp
 *.ipynb_checkpoints/

@@ -16,6 +16,9 @@ from multiprocessing import Value
 from tensorflow.python.summary.summary_iterator import summary_iterator
 from copy import deepcopy
 
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+os.environ["BITSANDBYTES_NOWELCOME"] = "1"
+
 from rlbench.backend import task as rlbench_task
 from rlbench.backend.utils import task_file_to_task_class
 from rlbench.action_modes.gripper_action_modes import Discrete
@@ -75,8 +78,11 @@ def load_agent(
         else:
             exp_cfg.merge_from_file(os.path.join(model_folder, "exp_cfg.yaml"))
 
-        # WARNING NOTE: a temporary hack to use place_with_mean in evaluation
+        # NOTE: to not use place_with_mean in evaluation
+        # needed for rvt-1 but not rvt-2
         if not use_input_place_with_mean:
+            # for backward compatibility
+            old_place_with_mean = exp_cfg.rvt.place_with_mean
             exp_cfg.rvt.place_with_mean = True
 
         exp_cfg.freeze()
@@ -136,6 +142,14 @@ def load_agent(
 
             mvt_cfg.freeze()
 
+            # for rvt-2 we do not change place_with_mean regardless of the arg
+            # done this way to ensure backward compatibility and allow the
+            # flexibility for rvt-1
+            if mvt_cfg.stage_two:
+                exp_cfg.defrost()
+                exp_cfg.rvt.place_with_mean = old_place_with_mean
+                exp_cfg.freeze()
+
             rvt = MVT(
                 renderer_device=device,
                 **mvt_cfg,
@@ -145,6 +159,8 @@ def load_agent(
                 network=rvt.to(device),
                 image_resolution=[IMAGE_SIZE, IMAGE_SIZE],
                 add_lang=mvt_cfg.add_lang,
+                stage_two=mvt_cfg.stage_two,
+                rot_ver=mvt_cfg.rot_ver,
                 scene_bounds=SCENE_BOUNDS,
                 cameras=CAMERAS,
                 log_dir=f"{eval_log_dir}/eval_run",

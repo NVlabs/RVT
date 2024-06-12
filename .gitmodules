@@ -3,7 +3,7 @@
 	url = https://github.com/stepjam/PyRep.git
 [submodule "libs/RLBench"]
 	path = rvt/libs/RLBench
-	url = https://github.com/MohitShridhar/RLBench.git
+	url = https://github.com/buttomnutstoast/RLBench.git
 [submodule "libs/YARR"]
 	path = rvt/libs/YARR
         url = https://github.com/NVlabs/YARR.git
