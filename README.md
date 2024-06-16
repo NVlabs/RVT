@@ -91,7 +91,7 @@ Once you have downloaded CoppeliaSim, add the following to your *~/.bashrc* file
 export COPPELIASIM_ROOT=<EDIT ME>/PATH/TO/COPPELIASIM/INSTALL/DIR
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$COPPELIASIM_ROOT
 export QT_QPA_PLATFORM_PLUGIN_PATH=$COPPELIASIM_ROOT
-export DISLAY=:1.0
+export DISPLAY=:1.0
 ```
 Remember to source your .bashrc (`source ~/.bashrc`) or  .zshrc (`source ~/.zshrc`) after this.
 
