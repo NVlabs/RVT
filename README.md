@@ -176,6 +176,8 @@ python eval.py --eval-episodes 25 --peract_official --peract_model_dir runs/pera
 ```
 
 ## Gotchas
+- If you face issues installing `xformers` and PyTorch3D, information in this issue might be useful https://github.com/NVlabs/RVT/issues/45.
+
 - If you get qt plugin error like `qt.qpa.plugin: Could not load the Qt platform plugin "xcb" <somepath>/cv2/qt/plugins" even though it was found`, try uninstalling opencv-python and installing opencv-python-headless
 
 ```
