@@ -157,12 +157,12 @@ python train.py --exp_cfg_opts "bs 4" --exp_cfg_path configs/rvt.yaml --device 0
 
 ### Evaluate on RLBench
 ##### Evaluate RVT-2 on RLBench
-Download the [pretrained RVT-2 model](https://drive.google.com/drive/folders/1yybWn6B7pGqbEi1t2hi_XPoELNgXaozY?usp=drive_link). Place the model (`model_99.pth` trained for 99 epochs or ~80K steps with batch size 192) and the config files under the folder `RVT/rvt/runs/rvt2/`. Run evaluation using (from folder `RVT/rvt`):
+Download the [pretrained RVT-2 model](https://huggingface.co/ankgoyal/rvt/tree/main/rvt2). Place the model (`model_99.pth` trained for 99 epochs or ~80K steps with batch size 192) and the config files under the folder `RVT/rvt/runs/rvt2/`. Run evaluation using (from folder `RVT/rvt`):
 ```
 python eval.py --model-folder runs/rvt2  --eval-datafolder ./data/test --tasks all --eval-episodes 25 --log-name test/1 --device 0 --headless --model-name model_99.pth
 ```
 ##### Evaluate RVT on RLBench
-Download the [pretrained RVT model](https://drive.google.com/drive/folders/1lf1znYM5I-_WSooR4VeJjzvydINWPj6B?usp=sharing). Place the model (`model_14.pth` trained for 15 epochs or 100K steps) and the config files under the folder `runs/rvt/`. Run evaluation using (from folder `RVT/rvt`):
+Download the [pretrained RVT model](https://huggingface.co/ankgoyal/rvt/tree/main/rvt). Place the model (`model_14.pth` trained for 15 epochs or 100K steps) and the config files under the folder `runs/rvt/`. Run evaluation using (from folder `RVT/rvt`):
 ```
 python eval.py --model-folder runs/rvt  --eval-datafolder ./data/test --tasks all --eval-episodes 25 --log-name test/1 --device 0 --headless --model-name model_14.pth
 ```
