@@ -168,7 +168,7 @@ python eval.py --model-folder runs/rvt  --eval-datafolder ./data/test --tasks al
 ```
 
 ##### Evaluate the official PerAct model on RLBench
-Download the [officially released PerAct model](https://drive.google.com/file/d/1vc_IkhxhNfEeEbiFPHxt_AsDclDNW8d5/view?usp=share_link).
+Download the [officially released PerAct model](https://github.com/peract/peract/releases/download/v1.0.0/peract_600k.zip).
 Put the downloaded policy under the `runs` folder with the recommended folder layout: `runs/peract_official/seed0`.
 Run the evaluation using:
 ```
